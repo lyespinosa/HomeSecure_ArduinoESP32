@@ -8,10 +8,13 @@
 #include <IRtext.h>
 #include <IRutils.h>
 #include <IRsend.h>
+#include "LiquidCrystal_I2C.h"
 
-const char* ssid = "Totalplay-12A2"; //Totalplay-12A2
-const char* password = "12A28E0FNtF9Qfmv"; //12A28E0FNtF9Qfmv
-const char* mqttServer = "35.169.100.202";
+LiquidCrystal_I2C lcd(0x27, 16,2);
+
+const char* ssid = "motorola"; //Totalplay-12A2
+const char* password = "904390439"; //12A28E0FNtF9Qfmv
+const char* mqttServer = "homesecuremqtt.ddns.net";
 const int mqttPort = 1883;
 const char* mqttUser = "leonardo";
 const char* mqttPassword = "90tr4dd3zqKeifermc12";
@@ -19,7 +22,7 @@ const char* mqttPassword = "90tr4dd3zqKeifermc12";
 const char* topicAir = "/homeSecure/esp32/air";
 const char* topicAirJson = "/homeSecure/esp32/air/json";
 
-char airJsonMessage = null;
+char* airJsonMessage = NULL;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -28,6 +31,9 @@ PubSubClient client(espClient);
 const uint16_t kRecvPin = 4;
 const uint16_t kIrLedPin = 23;      
 const uint16_t kPushButtonPin = 5; 
+
+const int ledRed = 18;
+const int ledGreen = 19;
 
 const uint32_t kBaudRate = 115200;
 const uint16_t kCaptureBufferSize = 1024;
@@ -53,62 +59,56 @@ IRsend irsend(kIrLedPin);
 bool encendido = false;
 
 
-uint16_t poweroff[] = {3142, 1640,  434, 1124,  432, 1126,  432, 418,  432, 416,  432, 416,  432, 1104,  454, 414,  434, 416,
-                       432, 1124,  432, 1126,  432, 420,  428, 1124,  434, 416,  432, 416,  434, 1124,  432, 1124,  434, 416,
-                       432, 1124,  434, 1126,  432, 416,  432, 418,  432, 1126,  432, 416,  432, 416,  454, 1104,  430, 416,  456,
-                       394,  432, 416,  432, 416,  432, 416,  434, 416,  434, 416,  432, 418,  432, 420,  432, 416,  432, 416,
-                       434, 416,  432, 418,  432, 418,  432, 416,  432, 416,  432, 416,  434, 414,  434, 414,  434, 418,  432,
-                       1122,  436, 414,  432, 416,  434, 1124,  432, 416,  432, 418,  432, 416,  432, 416,  434, 414,  434, 416,
-                       432, 416,  434, 414,  432, 416,  434, 1124,  432, 1126,  432, 418,  432, 418,  432, 416,  432, 418,  432,
-                       416,  434, 418,  432, 416,  432, 416,  432, 418,  432, 416,  432, 1124,  434, 416,  432, 418,  432, 416,
-                       432, 418,  432, 416,  432, 416,  432, 416,  432, 416,  434, 414,  434, 416,  432, 416,  434, 416,  430, 416,
-                       432, 418,  432, 416,  434, 414,  432, 416,  436, 416,  430, 420,  432, 416,  432, 418,  432, 416,  432, 418,
-                       432, 416,  432, 416,  434, 416,  434, 414,  432, 416,  434, 416,  432, 418,  454, 396,  430, 416,  434, 416,
-                       432, 416,  434, 1124,  454, 394,  454, 394,  454, 394,  454, 396,  456, 392,  454, 1104,  432
-                     };
+uint16_t poweroff[] = {3160, 1642,  434, 1122,  432, 1128,  430, 418,  432, 414,  434, 418,  432, 1124,  432, 416,  434, 418,  432, 1124,
+                       434, 1124,  434, 416,  432, 1126,  432, 416,  438, 412,  434, 1122,  432, 1126,  434, 416,  432, 1124,  434, 1124,  
+                       432, 418,  432, 416,  434, 1124,  432, 418,  432, 418,  432, 1126,  434, 416,  430, 418,  434, 416,  430, 418,  434, 
+                       414,  434, 416,  432, 416,  434, 416,  432, 416,  434, 416,  434, 414,  432, 416,  434, 414,  432, 416,  434, 414,  
+                       432, 418,  432, 416,  432, 418,  432, 418,  432, 416,  432, 1126,  432, 416,  432, 418,  432, 1124,  434, 1122,  
+                       434, 416,  432, 418,  432, 416,  434, 416,  430, 418,  432, 416,  432, 1126,  432, 1126,  432, 1126,  432, 1124,  
+                       434, 416,  432, 416,  434, 414,  432, 418,  434, 416,  432, 416,  432, 418,  430, 416,  434, 416,  432, 416,  432, 
+                       1124,  432, 416,  434, 416,  432, 418,  452, 396,  434, 416,  430, 418,  432, 416,  432, 416,  434, 416,  432, 416,  
+                       434, 416,  434, 416,  432, 416,  434, 418,  432, 416,  432, 416,  434, 416,  432, 418,  434, 416,  432, 416,  432, 
+                       416,  432, 416,  432, 418,  432, 416,  432, 416,  434, 416,  454, 396,  432, 416,  432, 418,  432, 418,  432, 414,  
+                       434, 416,  434, 416,  430, 1126,  434, 1122,  432, 1124,  432, 418,  432, 416,  432, 418,  432, 416,  432, 1124,  454};
 
-uint16_t poweron[] =  {3164, 1616,  456, 1100,  456, 1102,  458, 392,  456, 392,  458, 392,  456, 1102,  454, 394,  458, 394,  454,
-                       1102,  454, 1102,  454, 394,  480, 1078,  480, 368,  482, 366,  484, 1076,  480, 1078,  456, 394,  454, 1102,
-                       454, 1102,  456, 392,  456, 394,  456, 1100,  456, 394,  456, 392,  456, 1102,  456, 394,  454, 394,  456, 392, 
-                       456, 396,  454, 392,  454, 394,  456, 392,  458, 394,  458, 390,  454, 394,  454, 394,  456, 394,  456, 394,  
-                       456, 394,  458, 392,  480, 370,  480, 372,  480, 1076,  482, 368,  484, 364,  482, 1076,  456, 394,  456, 394,  
-                       456, 1102,  454, 392,  456, 394,  456, 392,  458, 392,  458, 392,  456, 392,  458, 392,  458, 390,  458, 392,  
-                       458, 1100,  456, 1102,  456, 394,  432, 414,  434, 416,  432, 418,  454, 394,  432, 416,  434, 416,  434, 416,  
-                       430, 420,  430, 416,  434, 1124,  432, 416,  432, 416,  434, 416,  432, 418,  432, 416,  432, 418,  432, 416,  
-                       432, 416,  432, 416,  434, 416,  432, 416,  434, 414,  434, 416,  430, 418,  434, 418,  454, 392,  456, 394,  
-                       456, 390,  458, 392,  458, 392,  456, 392,  458, 394,  458, 390,  458, 390,  458, 390,  458, 392,  432, 418,  434, 
-                       414,  436, 414,  434, 418,  432, 414,  434, 416,  432, 416,  432, 418,  432, 1126,  432, 1124,  438, 412,  456, 394,  
-                       456, 394,  432, 418,  432, 1124,  432
-                       };
+uint16_t poweron[] =  {3142, 1640,  434, 1126,  432, 1124,  434, 416,  434, 416,  434, 414,  434, 1124,  432, 416,  432, 416,  434, 
+                       1122,  434, 1124,  434, 416,  432, 1126,  432, 416,  434, 416,  434, 1124,  434, 1122,  434, 416,  434, 1124,  
+                       432, 1126,  432, 418,  432, 416,  432, 1126,  434, 418,  432, 416,  432, 1126,  432, 416,  434, 416,  430, 416,  
+                       432, 418,  432, 416,  434, 416,  432, 418,  432, 416,  432, 416,  434, 418,  432, 416,  434, 416,  434, 416,  432, 
+                       416,  434, 414,  434, 416,  432, 420,  430, 1126,  432, 418,  432, 416,  434, 1126,  434, 414,  434, 416,  434, 1124,  
+                       434, 1124,  432, 418,  430, 418,  432, 418,  432, 416,  434, 416,  432, 416,  434, 1124,  432, 1124,  432, 1126,  
+                       432, 1124,  432, 418,  432, 416,  434, 416,  432, 418,  432, 414,  432, 416,  434, 416,  432, 418,  434, 414,  432, 
+                       416,  432, 1126,  432, 416,  430, 418,  430, 418,  432, 416,  436, 414,  432, 418,  430, 420,  430, 418,  436, 412,  
+                       432, 418,  432, 418,  430, 418,  432, 416,  434, 416,  434, 414,  434, 414,  432, 418,  432, 416,  432, 418,  430, 
+                       416,  432, 416,  434, 416,  434, 416,  432, 416,  434, 414,  434, 416,  434, 416,  432, 418,  434, 414,  434, 416,  
+                       434, 416,  434, 416,  432, 418,  434, 1122,  436, 1124,  432, 416,  434, 1124,  434, 416,  432, 418,  432, 416,  432, 1126,  434};
 
-void startConection(){
-  WiFi.begin(ssid, password);
-  
-  Serial.print("Connecting WiFi.");
-
-  while (WiFi.status() != WL_CONNECTED){
-    delay(500);
-    Serial.print(".") ;
-    lcd.print(".");
-  }
-
-  Serial.println("Connected to the WiFi network");
-  client.setServer(mqttServer, mqttPort);
-  client.setCallback(callback);
+void reconnect() {
 
   while (!client.connected()){      
 
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Start MQTT...");
+
+
     Serial.println("Connecting to MQTT...");
-       if (client.connect("ESP32Client", mqttUser, mqttPassword )){
-         
+    delay(1000);
+       if (client.connect("ESP32Client_Clima", mqttUser, mqttPassword )){
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("connected");
           Serial.println("connected");
           client.subscribe(topicAir);
           delay(500);
+          lcd.clear();
 
        }
        else
        {   
-         
+           lcd.clear();
+           lcd.setCursor(0, 0);
+           lcd.print("Failed");
            Serial.println("failed, trying again");
            Serial.print(client.state());
            delay(2000);
@@ -117,25 +117,64 @@ void startConection(){
 
 }
 
+
+void startConection()
+{
+  WiFi.begin(ssid, password);
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Starting");
+  delay(1000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("WiFi");
+
+  Serial.print("Connecting WiFi.");
+
+
+  lcd.setCursor(0, 1);
+  while (WiFi.status() != WL_CONNECTED){
+    delay(500);
+    Serial.print(".") ;
+    lcd.print(".");
+  }
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Connected WiFi");
+  delay(1000);
+
+
+  Serial.println("Connected to the WiFi network");
+  client.setServer(mqttServer, mqttPort);
+  client.setCallback(callback);
+
+}
+
 void sendOff() {
-  if(!encendido){
-      uint16_t rawDataLength = sizeof(poweroff) / sizeof(poweron[0]);
+  if(encendido){
+      uint16_t rawDataLength = sizeof(poweroff) / sizeof(poweroff[0]);
       uint16_t khz = 38;  
     
       irsend.sendRaw(poweroff, rawDataLength, khz); 
       Serial.println("Aire acondicionado apagado");
       airJsonMessage = "off";
+      Serial.println("Clima apagado");
+      encendido = false;
     }
 }
 
 void sendOn() {
   if(!encendido){
-      uint16_t rawDataLength = sizeof(poweroff) / sizeof(poweron[0]);
+      uint16_t rawDataLength = sizeof(poweron) / sizeof(poweron[0]);
       uint16_t khz = 38;  
     
-      irsend.sendRaw(poweroff, rawDataLength, khz); 
+      irsend.sendRaw(poweron, rawDataLength, khz); 
       Serial.println("Aire acondicionado encendido");
       airJsonMessage = "on";
+      Serial.println("Clima encendido");
+      encendido = true;
     }
 }
 
@@ -171,7 +210,19 @@ void airIR() {
 }
 
 void setup() {
+  pinMode(ledRed, OUTPUT);
+  pinMode(ledGreen, OUTPUT);
+  pinMode(kPushButtonPin, INPUT_PULLUP);  
+  pinMode(ledRed, OUTPUT);
+  pinMode(ledGreen, OUTPUT);
+
+  
+  Serial.begin(115200);
+  
+  digitalWrite(ledRed, HIGH);
   startConection();
+  digitalWrite(ledRed, LOW);
+  digitalWrite(ledGreen, HIGH);
 
 #if defined(ESP8266)
   Serial.begin(kBaudRate, SERIAL_8N1, SERIAL_TX_ONLY);
@@ -188,14 +239,20 @@ void setup() {
   irrecv.enableIRIn();  // Start the receiver
 
   irsend.begin();  
-  pinMode(kPushButtonPin, INPUT_PULLUP);  
 }
 
 
 
 void loop() {
 
+  if (!client.connected()) {
+    digitalWrite(ledRed, HIGH);
+    reconnect();
+    digitalWrite(ledRed, LOW);
+    digitalWrite(ledGreen, HIGH);
+  }
   client.loop();
+
   airIR();
 
   
@@ -215,11 +272,29 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if (String(topic) == topicAir) {
     if (message == "on") {
+      Serial.println("on");
       sendOn();
-      client.publish(topicAirJson, airJsonMessage);
+
+      StaticJsonDocument<200> jsonDoc;
+      jsonDoc["data"] = "Clima activado";
+      jsonDoc["status"] = "on";
+
+      char buffer[200];
+      serializeJson(jsonDoc, buffer);
+
+      client.publish(topicAirJson, buffer);
     } else if (message == "off") {
+      Serial.println("off");
       sendOff();
-      client.publish(topicAirJson, airJsonMessage);
+
+      StaticJsonDocument<200> jsonDoc;
+      jsonDoc["data"] = "Clima desactivado";
+      jsonDoc["status"] = "off";
+
+      char buffer[200];
+      serializeJson(jsonDoc, buffer);
+
+      client.publish(topicAirJson, buffer);
     }
   }
 }

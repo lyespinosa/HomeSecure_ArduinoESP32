@@ -6,9 +6,9 @@
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-const char *ssid = "UbeeB263-2.4G";  // Totalplay-12A2
-const char *password = "5BADEDB263"; // 12A28E0FNtF9Qfmv
-const char *mqttServer = "35.169.100.202";
+const char *ssid = "motorola";  // Totalplay-12A2
+const char *password = "904390439"; // 12A28E0FNtF9Qfmv
+const char *mqttServer = "homesecuremqtt.ddns.net";
 const int mqttPort = 1883;
 const char *mqttUser = "leonardo";
 const char *mqttPassword = "90tr4dd3zqKeifermc12";
@@ -61,10 +61,44 @@ Ultrasonic ultrasonic(triggerPin, echoPin);
 const int ledRed = 15;
 const int ledGreen = 23;
 
+void reconnect() {
+
+  while (!client.connected()){      
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Start MQTT...");
+
+
+    Serial.println("Connecting to MQTT...");
+    delay(1000);
+       if (client.connect("ESP32Client_Detector", mqttUser, mqttPassword )){
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("connected");
+          Serial.println("connected");
+          client.subscribe(topicAlarm);
+          delay(500);
+          lcd.clear();
+
+       }
+       else
+       {   
+           lcd.clear();
+           lcd.setCursor(0, 0);
+           lcd.print("Failed");
+           Serial.println("failed, trying again");
+           Serial.print(client.state());
+           delay(2000);
+       }
+  }
+
+}
+
 void startConection()
 {
   WiFi.begin(ssid, password);
-
+  
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Starting");
@@ -75,11 +109,11 @@ void startConection()
 
   Serial.print("Connecting WiFi.");
 
+
   lcd.setCursor(0, 1);
-  while (WiFi.status() != WL_CONNECTED)
-  {
+  while (WiFi.status() != WL_CONNECTED){
     delay(500);
-    Serial.print(".");
+    Serial.print(".") ;
     lcd.print(".");
   }
 
@@ -88,38 +122,11 @@ void startConection()
   lcd.print("Connected WiFi");
   delay(1000);
 
+
   Serial.println("Connected to the WiFi network");
   client.setServer(mqttServer, mqttPort);
   client.setCallback(callback);
 
-  while (!client.connected())
-  {
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Start MQTT...");
-
-    Serial.println("Connecting to MQTT...");
-    if (client.connect("ESP32Client", mqttUser, mqttPassword))
-    {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("connected");
-      Serial.println("connected");
-      client.subscribe(topicAlarm);
-      delay(500);
-      lcd.clear();
-    }
-    else
-    {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Failed");
-      Serial.println("failed, trying again");
-      Serial.print(client.state());
-      delay(2000);
-    }
-  }
 }
 
 void reproducirNotificacion()
@@ -144,7 +151,7 @@ void activeBuzerByUltrasonic()
 
   client.publish(topicUltrasonic, buffer);
 
-  tone(buzzerPin, 1000);
+  tone(buzzerPin, 500);
   Serial.println("Alarma encendida");
 }
 
@@ -160,8 +167,8 @@ void activeBuzerBySmoke()
 
   client.publish(topicSmoke, buffer);
 
-  tone(buzzerPin, 1000);
-  Serial.println("Alarma encendida");
+  tone(buzzerPin, 500);
+  Serial.println("Alarma de humo encendida");
 }
 
 void disableBuzzerByUltrasonic()
@@ -285,7 +292,7 @@ void smokeSensor()
 
       if (smokeValue > smokeThreshold)
       {
-        Serial.println("¡Se ha detectado humo!");
+        activeBuzerBySmoke();
         smokeDetected = true;
         lastSmokeTime = currentMillis;
       }
@@ -323,41 +330,52 @@ void setup()
 
 void loop()
 {
+
+  if (!client.connected()) {
+    digitalWrite(ledRed, HIGH);
+    reconnect();
+    digitalWrite(ledRed, LOW);
+    digitalWrite(ledGreen, HIGH);
+  }
   client.loop();
 
   ultrasonicoSensor();
 }
 
-void callback(char *topic, byte *payload, unsigned int length)
-{
+void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Mensaje recibido en el tópico: ");
   Serial.println(topic);
-
+  
   String message = "";
-  for (int i = 0; i < length; i++)
-  {
+  for (int i = 0; i < length; i++) {
     message += (char)payload[i];
   }
 
   Serial.print("Mensaje recibido: ");
   Serial.println(message);
 
-  if (String(topic) == topicAlarm)
-  {
-    if (message == "on")
-    {
-      if (!buzzerActivo)
-      {
-
-        activeBuzer();
+  if (String(topic) == topicAlarm) {
+    if (message == "on") {
+      if(buzzerActivo == false){
+      tone(buzzerPin, 500);
+      lcd.setCursor(0, 1);
+      lcd.print("Alarma activada");
+      Serial.println("Alarma activada");
+      buzzerActivo = true;
       }
-    }
-    else if (message == "off")
-    {
-      if (buzzerActivo)
-      {
-
-        disableBuzzer();
+    } else if (message == "off") {
+      if(buzzerActivo == true){
+      noTone(buzzerPin);
+      lcd.setCursor(0, 1);
+      lcd.print("                ");
+      lcd.setCursor(0, 1);
+      lcd.print("Alarma desactivada");
+      Serial.println("Alarma desactivada");
+      reproducirNotificacion();
+      delay(1500);
+      lcd.setCursor(0, 1);
+      lcd.print("                ");
+      buzzerActivo = false;
       }
     }
   }

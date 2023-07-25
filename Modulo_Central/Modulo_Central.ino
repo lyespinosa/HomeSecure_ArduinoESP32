@@ -10,9 +10,10 @@
 
 LiquidCrystal_I2C lcd(0x27, 16,2);
 
-const char* ssid = "Totalplay-12A2"; //Totalplay-12A2
-const char* password = "12A28E0FNtF9Qfmv"; //12A28E0FNtF9Qfmv
-const char* mqttServer = "35.169.100.202";
+const char *ssid = "motorola";  // Totalplay-12A2
+const char *password = "904390439"; // 12A28E0FNtF9Qfmv
+
+const char* mqttServer = "homesecuremqtt.ddns.net";
 const int mqttPort = 1883;
 const char* mqttUser = "leonardo";
 const char* mqttPassword = "90tr4dd3zqKeifermc12";
@@ -22,6 +23,7 @@ const char* topicTemperatureDB = "/homeSecure/esp32/temperatureDB";
 const char* topicUltrasonic = "/homeSecure/esp32/ultrasonic";
 const char* topicSmoke = "/homeSecure/esp32/smoke";
 const char* topicAlarm = "/homeSecure/esp32/alarm";
+const char* topicAlarmJson = "/homeSecure/esp32/alarm/json";
 
 
 
@@ -39,34 +41,49 @@ const int buzzerPin = 2;
 const int buttonPin = 5;
 
 unsigned long previousTemperatureMillisDB = 0;
-const unsigned long temperatureIntervalDB = 10000 * 60 * 60 * 2; //2hrs
+const unsigned long temperatureIntervalDB = 1000 * 60 * 60 * 2;//2hrs
 
 unsigned long previousTemperatureMillis = 0;
 const unsigned long temperatureInterval = 1000 * 5; //5s
 
-/*//----Sensor ultrasónico
 
-// Pin para el sensor ultrasónico
-const int triggerPin = 18;
-const int echoPin = 19;
-// Pin para el buzzer
+void reconnect() {
 
-// Pin para el botón
+  while (!client.connected()){      
 
-// Distancia umbral en centímetros
-const int distanciaUmbral = 30;
-// Tiempo de espera en milisegundos para encender el buzzer
-const unsigned long tiempoEspera = 5000;
-// Variables para medir el tiempo
-unsigned long tiempoInicio;
-unsigned long tiempoActual;
-// Objeto para el sensor ultrasónico
-Ultrasonic ultrasonic(triggerPin, echoPin);*/
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Start MQTT...");
 
 
+    Serial.println("Connecting to MQTT...");
+    delay(1000);
+       if (client.connect("ESP32Client_Central", mqttUser, mqttPassword )){
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("connected");
+          Serial.println("connected");
+          client.subscribe(topicAlarm);
+          delay(500);
+          lcd.clear();
+
+       }
+       else
+       {   
+           lcd.clear();
+           lcd.setCursor(0, 0);
+           lcd.print("Failed");
+           Serial.println("failed, trying again");
+           Serial.print(client.state());
+           delay(2000);
+       }
+  }
+
+}
 
 void startConection(){
   dht.begin();  
+  
   WiFi.begin(ssid, password);
   
   lcd.clear();
@@ -97,83 +114,7 @@ void startConection(){
   client.setServer(mqttServer, mqttPort);
   client.setCallback(callback);
 
-  while (!client.connected()){      
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Start MQTT...");
-
-
-    Serial.println("Connecting to MQTT...");
-       if (client.connect("ESP32Client", mqttUser, mqttPassword )){
-          lcd.clear();
-          lcd.setCursor(0, 0);
-          lcd.print("connected");
-          Serial.println("connected");
-          client.subscribe(topicAlarm);
-          delay(500);
-          lcd.clear();
-
-       }
-       else
-       {   
-           lcd.clear();
-           lcd.setCursor(0, 0);
-           lcd.print("Failed");
-           Serial.println("failed, trying again");
-           Serial.print(client.state());
-           delay(2000);
-       }
-  }
-
 }
-
-/*void ultrasonicoSensor(){
-  float distancia = ultrasonic.read();
-
-  if (digitalRead(buttonPin) == LOW) {
-    // Si el botón está presionado, apagar el Lbuzzer
-    noTone(buzzerPin);
-    tiempoInicio = 0;
-    Serial.println("LED apagado");
-  } else if (distancia <= distanciaUmbral) {
-    // Si la distancia es menor o igual al umbral, iniciar el temporizador
-    if (tiempoInicio == 0) {
-      tiempoInicio = millis();
-    } else {
-      tiempoActual = millis();
-      unsigned long tiempoTranscurrido = tiempoActual - tiempoInicio;
-
-      if (tiempoTranscurrido >= tiempoEspera) {
-        // Si el tiempo transcurrido supera el tiempo de espera, encender el buzzer
-
-        StaticJsonDocument<200> jsonDoc;
-
-        // Añade datos al objeto JSON
-        jsonDoc["data"] = "Alarma de movimiento activada";
-        jsonDoc["status"] = "on";
-
-        char buffer[200];
-        serializeJson(jsonDoc, buffer);
-
-        client.publish(topicUltrasonic, buffer);
-        Serial.println("Datos enviados al broker: " + String(buffer));
-        
-        tone(buzzerPin, 1000);
-        Serial.println("Alarma encendida");
-        
-      }
-    }
-  } else {
-    // Si la distancia supera el umbral, reiniciar el temporizador
-    tiempoInicio = 0;
-  }
-
-  Serial.print("Distancia: ");
-  Serial.print(distancia);
-  Serial.println(" cm");
-
-}*/
 
 void temperatureSensor(){
   unsigned long currentMillis = millis();
@@ -250,8 +191,15 @@ void setup() {
 }  
 
 void loop(){
+
+  if (!client.connected()) {
+    digitalWrite(ledRed, HIGH);
+    reconnect();
+    digitalWrite(ledRed, LOW);
+    digitalWrite(ledGreen, HIGH);
+  }
   client.loop();
-  //ultrasonicoSensor();
+
   temperatureSensor(); 
   temperatureSensorDB(); 
   
@@ -272,12 +220,22 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if (String(topic) == topicAlarm) {
     if (message == "on") {
-      tone(buzzerPin, 2000);
+      //tone(buzzerPin, 2000);
       lcd.setCursor(0, 1);
       lcd.print("Alarma activada");
       Serial.println("Alarma activada");
+
+      StaticJsonDocument<200> jsonDoc;
+      jsonDoc["data"] = "Alarma activada";
+      jsonDoc["status"] = "on";
+
+      char buffer[200];
+      serializeJson(jsonDoc, buffer);
+
+      client.publish(topicAlarmJson, buffer);
+      
     } else if (message == "off") {
-      noTone(buzzerPin);
+      //noTone(buzzerPin);
       lcd.setCursor(0, 1);
       lcd.print("                ");
       lcd.setCursor(0, 1);
@@ -287,6 +245,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
       delay(1500);
       lcd.setCursor(0, 1);
       lcd.print("                ");
+
+      StaticJsonDocument<200> jsonDoc;
+      jsonDoc["data"] = "Alarma desactivada";
+      jsonDoc["status"] = "off";
+
+      char buffer[200];
+      serializeJson(jsonDoc, buffer);
+
+      client.publish(topicAlarmJson, buffer);
       
     }
   }
